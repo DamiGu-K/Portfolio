@@ -1,0 +1,83 @@
+---
+title: "PS2_First Term_Probability Models and their Applications in Public Health"
+format: html
+editor: visual
+toc: true
+toc-depth: 2
+execute: 
+  warning: false
+bibliography: references.bib
+---
+
+# Problem 1. Vitamin A Supplementation to prevent children mortality in Nepal
+
+## Background
+
+Dean Alfred Sommer and his colleagues discovered that children with mild xerophthalmia (a vitamin A deficiency condition causing night blindness or Bitot's spots) had a 4-fold higher mortality risk compared to children with normal eyes, expanding understanding beyond its known role in childhood blindness. This observation, combined with knowledge about vitamin A's role in infection resistance, led Hopkins researchers to conduct large trials in Indonesia (28,000+ children) and Nepal (25,000+ children), demonstrating that regular high-potency vitamin A dosing could reduce child mortality by approximately 30%. These findings were later replicated across Asia and Africa, leading to the current project which will analyze original data from the Nepal community trial.
+
+[@Sommer1986]
+
+[@West1991]
+
+## Data Processing
+
+Let's download nepal621 data and construct a 2\*2 contingency table of treatment (placebo vs vit A) against status (alive vs dead). Calculate the rate of child mortality in Nepal for children receiving placebo and vit A.
+
+```{r}
+library(tidyverse)
+nepal621<-read.csv("nepal621.csv")
+CT = table(nepal621$trt, nepal621$status)
+addmargins(CT)
+prop.table(CT, margin=1)
+```
+
+Different types of probabilities
+
+::: panel-tabset
+## Marginal
+
+Pr(VitA)=13372/27121 = 0.5063. \
+Pr(Died)= 523/27121 = 0.0193
+
+## Joint
+
+Pr(Died and Vit A) = 233/27121 = 0.0086\
+Pr(Died and Placebo) = 290/27121 = 0.0107
+
+## Conditional
+
+Pr (Died \| Vit A) = Pr (Died and Vit A) / Pr (Vit A) = 233/13732 = 0.0170\
+Pr (Died \| Placebo) = 290/13389 = 0.0217
+:::
+
+For each treatment group, construct the 2x2 contingency table of sex (girls or boys) versus vital status (alive or dead). From these tables, calculate the overall probability of dying for boys and girls (sex defined at birth) separately by treatment group.
+
+**Does the effect of treatment appear to vary by sex?** 
+
+```{r}
+nepal.plac = filter(nepal621, trt=="Placebo")
+nepal.vit = filter(nepal621, trt=="Vit A")
+CT = table(nepal.plac$sex, nepal.plac$status)
+addmargins(CT)
+prop.table(CT, margin=1)
+CT = table(nepal.vit$sex, nepal.vit$status)
+addmargins(CT)
+prop.table(CT, margin=1)
+```
+
+## 
+
+## Data analysis 
+
+The mortality rate (the proportion dying) in the Vit A group is 1.7% and in the placebo group it's 2.17%. Relative risk of death in the Vit A vs placebo group is 1.7/2.17 = 0.78, indicating an overall reduction is 22%.
+
+| Treatment group                             | Boys   | Girls  |
+|---------------------------------------------|--------|--------|
+| placebo                                     | 0.0181 | 0.0254 |
+| VitA                                        | 0.0158 | 0.0182 |
+| RR of Death in the Vit A vs Placebo groups  | 0.87   | 0.72   |
+
+For both groups, there is evidence to support the hypothesis that Vitamin A supplementation reduced mortality in Nepali pre-school children. For boys, the relative risk is 0.87, indicating a 13% reduction in risk of death with Vitamin A. For girls, the relative risk is 0.72, indicating a 28% reduction in risk of death with Vitamin A. 
+
+If we see this as the stratum-specific (Boys vs Girls) estimates are different: EMM presents.
+
