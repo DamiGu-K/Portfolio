@@ -1,0 +1,364 @@
+---
+title: "PS2_Second Term"
+author: Hyundam (Dami) Gu 
+format: html
+editor: visual
+execute: 
+  warning: false
+toc: true
+toc-depth: 2
+---
+
+## I. Multiple linear regression to compare "growth" for male and female infants (ANCOVA)
+
+```{r}
+library(dplyr)
+```
+
+Data Set Codebook:
+
++----------------+-----------------------+-----------------------------+
+| Variable       | Description           | Coding                      |
++================+=======================+=============================+
+| 1.  id         | Identification number |                             |
++----------------+-----------------------+-----------------------------+
+| 2.  age        | Age of child          | Months                      |
++----------------+-----------------------+-----------------------------+
+| 3.  sex        | Child's sex           | 1= Male\                    |
+|                |                       | 2 = Female                  |
++----------------+-----------------------+-----------------------------+
+| 4.  weight     | Weight of child       | kg                          |
++----------------+-----------------------+-----------------------------+
+| 5.  height     | Height of child       | cm                          |
++----------------+-----------------------+-----------------------------+
+| 6.  armcirc    | Arm circumference     | cm                          |
++----------------+-----------------------+-----------------------------+
+
+Using the Nepal Children’s Anthropometry Dataset for children ages 0-60 months, omit children with ages greater than 12 months. Also omit all children for whom height, weight or arm circumference is missing.
+
+```{r}
+library(tidyverse)
+nepalA = read_csv("nepal_anthro.csv")
+nepalData = nepalA %>% ### store this dataset under a new name
+            filter(age <= 12) %>% ### keep only children with age <= 12
+            filter(!is.na(height), !is.na(weight), !is.na(armcirc)) ### remove NAs
+```
+
+Make a scatter-plot of weight against age discriminating boy and girl infants by the plotting color. 
+
+```{r}
+nepalData = nepalData %>%
+mutate(gender = recode_factor(sex, `1`="Male", `2`="Female"))
+### the first level you designate will be the reference!
+qplot(x=jitter(age), y=weight, color=gender, shape=gender,data=nepalData, xlab="Age in months", ylab="Weight in kg")
+```
+
+Fit a simple ANCOVA model (Model A) that includes gender, age and gender\*age (gender by age interaction). Obtain the fitted values from this model and add them to the graph using the same colors for the boy and girl predicted values as for the original data.
+
+```{r}
+model1 = lm(weight ~ age + gender, data=nepalData)
+summary(model1)
+confint(model1)
+model2 = lm(weight ~ age*gender, data=nepalData)
+summary(model2)
+confint(model2)
+
+qplot(x=jitter(age), y=weight, color=gender, shape=gender, data=nepalData, xlab="Age in months", ylab="Weight in kg") +
+geom_line(aes(x = age, y=model2$fitted.values, color=gender))
+```
+
+Interpret each of the coefficients in this model. Do the data provide evidence that birth weights are different for boys and girls; growth rates?
+
+**The model is Y =** β**0+**β**1age+**β**2gender+**β**3age_gender +** ε
+
+We can interpret:
+
+β**0** = expected (average) weight for a 0-month boy
+
+β**0+**β**2** = expected (average) weight for a 0-month girl
+
+β**2** = difference in the expected (average) weight between girls and boys at birth
+
+β**1** = change in the expected (average) weight per month of age (growth rate) for boys
+
+β**1**+β**3** = change in the expected (average) weight per month of age (growth rate) for girls
+
+β**3** = difference in the change in the expected (average) weight per month of age between girls and boys
+
+**The estimate of** β**1+**β**3 plus the associated 95% confidence interval is:**
+
+```{r}
+library(survey)
+svycontrast(model2, c(0,1,0,1))
+confint(svycontrast(model2, c(0,1,0,1)))
+```
+
+The data provide evidence of a difference in birth weight between girls and boys. On average, girls weight 0.42 kg less than boys (95% CI: 0.14 to 0.69). However, the rate of growth is not statistically significantly different between girls and boys (difference in rate = -0.02 kg/month, 95%CI: -0.05 to 0.02). This can be observed visually in the graph which shows two roughly parallel lines depicting weight vs age for boys and girls. The growth rate for boys is estimated as 0.34 kg/month (95% CI: 0.31 to 0.37) whereas the growth rate for girls is estimated as 0.32 kg/month (95% CI: 0.30 to 0.35).
+
+Calculate the **residuals** from this model and plot them against **age** using the same colors for boys and girls as were used for the raw data.
+
+```{r}
+qplot(y=model2$residuals, x=jitter(age), color=gender, shape=gender, data=nepalData, ylab="Residuals", xlab="Age in months")
+```
+
+The residuals plot does not show random scatter. The pattern is non-linear, with a preponderance of negative residuals (indicating that the predicted values overestimate the observed values) before 4 months of age. Thus, a model that assumes linear growth during the first year of life does not appear to be adequate; a “broken-arrow” relationship could be explored.
+
+Add a linear spline term with a break at 4 months and its interaction with gender to the model above. Call the new model B. Calculate and plot the fitted values from Model B against age. Interpret each of the coefficients in Model B.
+
+```{r}
+nepalData = nepalData %>% mutate(agesp = ifelse(age > 4, age-4, 0))
+
+model3 = lm(weight ~ age*gender + agesp*gender, data=nepalData)
+summary(model3)
+confint(model3)
+
+qplot(x=jitter(age), y=weight, color=gender, shape=gender, data=nepalData, xlab="Age in months", ylab="Weight in kg") +
+geom_line(aes(x = age, y=model3$fitted.values, color=gender))
+```
+
+**The model is Y =** β**0+**β**1age+**β**2gender+**β**3agesp +** β**4age_gender+**β**5agesp_gender+** ε
+
+We can interpret:
+
+β**0** = expected (average) weight for a 0-month boy
+
+β**0+**β**2** = expected (average) weight for a 0-month girl
+
+β**2** = difference in the expected (average) weight between girls and boys at birth
+
+β**1** = change in the expected (average) weight per month of age (growth rate) for boys 0-4 months of age
+
+β**1** +β**3** = change in the expected (average) weight per month of age (growth rate) for boys over 4 months of age
+
+β**1**+β**4** = change in the expected (average) weight per month of age (growth rate) for girls 0-4 months of age
+
+β**4** = difference in the change in the expected (average) weight per month of age between girls and boys of age 0-4 months
+
+β**1**+β**3** +β**4** +β**5**= change in expected (average) weight per month of age (growth rate) for girls over 4 months of age
+
+β**4+**β**5** = difference in the change in expected (average) weight per month of age between girls and boys over 4 months of age
+
+Test the null hypothesis that growth is linear over the first twelve months by testing whether the coefficients of the two new terms in Model B are both zero.
+
+```{r}
+anova(model2, model3)
+# tests the coefficients that are different between the two models
+```
+
+For boys, the estimated growth rates are:
+
+*0-4 months:*
+
+```{r}
+library(survey)
+
+svycontrast(model3, c(0,1,0,0,0,0))
+confint(svycontrast(model3, c(0,1,0,0,0,0)))
+```
+
+*\>4 months:*
+
+```{r}
+
+svycontrast(model3, c(0,1,0,1,0,0))
+confint(svycontrast(model3, c(0,1,0,1,0,0)))
+```
+
+For girls, the estimated growth rates are:
+
+*0-4 months:*
+
+```{r}
+svycontrast(model3, c(0,1,0,0,1,0))
+confint(svycontrast(model3, c(0,1,0,0,1,0)))
+```
+
+*\>4 months:*
+
+```{r}
+svycontrast(model3, c(0,1,0,1,1,1))
+confint(svycontrast(model3, c(0,1,0,1,1,1)))
+```
+
+For boys, the estimated average birth weight (weight at 0 months) is:
+
+```{r}
+svycontrast(model3, c(1,0,0,0,0,0))
+confint(svycontrast(model3, c(1,0,0,0,0,0)))
+```
+
+For girls, the estimated average birth weight (weight at 0 months) is:
+
+```{r}
+svycontrast(model3, c(1,0,1,0,0,0))
+confint(svycontrast(model3, c(1,0,1,0,0,0)))
+```
+
+Calculate the residuals from this model and plot them against age. Comment on any assumptions of the linear regression that still appear to be violated.
+
+```{r}
+qplot(y=model3$residuals, x=jitter(age), data=nepalData, ylab="Residuals",
+xlab="Age in months") + geom_hline(yintercept=0,color="red")
+```
+
+Although the residuals plot appears to show more random scatter about the value of zero, the variability in the residuals appears to increase with increasing age, which would violate the assumption of equal (constant) variance.
+
+### Conclusion 
+
+We investigated the relationship between weight and age (growth rate) by gender. The average birth weight for girls is estimated as 2.59kg (95% CI : 2.30 - 2.87) while that of boys is 2.79 (95% CI : 2.49 - 3.09). Weight is estimated to increase in a roughly linear fashion by 0.78kg per month of age until 4 months for boys (95% CI : 0.69 - 0.89) and 0.70 for girls (95% CI : 0.60 - 0.89). The growth rate decreased to approximately 0.20kg per month for infants of age \>4months (95% CI : 0.16 - 0.24).
+
+## II Modelling Non-linear Relationship with MLR
+
+We use same data from problem I.
+
+Plot weight against age (use small plotting symbols, e.g. dots, and jitter the points so they can all be seen).
+
+```{r}
+qplot(x=jitter(age), y=weight, data=nepalData, xlab="Age in months",
+ylab="Weight in kg", ylim=c(0,12))
+```
+
+Calculate the sample mean weight for each month of age and add the estimated means for each month to the graph (with bold symbols and a connecting line) to highlight the trend.
+
+```{r}
+nepalData %>% group_by(age) %>%summarize(mean=mean(weight))
+qplot(x=jitter(age), y=weight, data=nepalData, xlab="Age in months", ylab="Weight in kg", ylim=c(0,12)) +
+stat_summary(aes(x=age, y=weight), fun.y=mean, geom="line", lwd=2,color="red")
+```
+
+Use simple linear regression to regress weight on age and add the least squares line to the plot.
+
+```{r}
+model4 = lm(weight ~ age, data=nepalData)
+summary(model4)
+confint(model4)
+qplot(x=jitter(age), y=weight, data=nepalData, xlab="Age in months", ylab="Weight in kg", ylim=c(0,12)) + geom_smooth(method="lm")
+```
+
+Calculate the residuals from the simple linear regression above and plot them versus age. Add a smooth function using lowess smoothing. Comment in one sentence on the adequacy of a linear assumption for “growth”.
+
+```{r}
+qplot(y=model4$residuals, x=jitter(age), data=nepalData, ylab="Residuals", xlab="Age in months") +
+geom_smooth(method="loess", se=FALSE) + #loess smoother
+geom_hline(yintercept=0, color="red") #horizontal y=0 line
+```
+
+The plots of residuals from the simple linear regression of weight on age versus age does not demonstrate a random scatter of points about zero. The pattern of preponderance of negative residuals for the youngest ages suggests a non-linear relationship between weight and age.
+
+Use linear regression to regress weight onto the monthly mean ages.
+
+```{r}
+model5 = lm(weight ~ as.factor(age), data=nepalData)
+summary(model5)
+confint(model5)
+```
+
+Linear splines:
+
+[a. Create three new variables:]{.underline}
+
+age_sp1 = (age – 2)+ = age – 2 if age \> 2, 0 if not
+
+age_sp2 = (age - 4)+ = age – 4 if age \> 4, 0 if not
+age_sp3 = (age - 6)+ = age – 6 if age \> 6, 0 if not
+
+```{r}
+nepalData = nepalData %>%
+mutate(age_sp1 = ifelse(age > 2, age-2, 0)) %>%
+mutate(age_sp2 = ifelse(age > 4, age-4, 0)) %>%
+mutate(age_sp3 = ifelse(age > 6, age-6, 0))
+```
+
+[b. Regress weight on age, age_sp1, age_sp2 and age_sp3.]{.underline}
+
+```{r}
+model6 = lm(weight ~ age + age_sp1 + age_sp2 + age_sp3, data=nepalData)
+summary(model6)
+confint(model6)
+```
+
+[c. Get the predicted values from this regression. Add these to the plot of weight against age from step 1.]{.underline}
+
+```{r}
+qplot(x=jitter(age), y=weight, data=nepalData, xlab="Age in months", ylab="Weight in kg", ylim=c(0,12)) +
+geom_line(aes(x = age, y=model6$fitted.values), color="red", lwd=2)
+```
+
+[d. Interpret the meaning of the coefficients for the three “linear spline” terms: age_sp1, age_sp2 and age_sp3.]{.underline}
+
+**The model is Y =** β**0+**β**1age+**β**2age_sp1+**β**3age_sp2+**β**4age_sp3 +** ε
+
+We can interpret:
+
+β**0** = expected (average) weight for a 0-month child
+
+β**1** = change in the expected (average) weight per month of age for children aged 0-2 months
+
+β**1**+β**2** = change in the expected (average) weight per month of age for children aged 2-4 months
+
+β**1**+β**2** +β**3** = change in the expected (average) weight per month of age for children aged 4-6 months
+
+β**1**+β**2** +β**3**+β**4**= change in the expected (average) weight per month of age between children aged 6-12 months
+
+β**2** = difference in the change in the expected (average) weight per month of age between children aged 2-4 months and children aged 0-2 months
+
+β**3** = difference in the change in the expected (average) weight per month of age between children aged 4-6 months and children aged 2-4 months
+
+β**4** = difference in the change in the expected (average) weight per month of age between children aged 6-12 months and children aged 4-6 months
+
+Use an F-test with 3 degrees of freedom in the numerator to test the null hypothesis of a linear relationship against the alternative defined by the linear spline fit in the steps above.
+
+```{r}
+anova(model4, model6)
+# or
+regTermTest(model6, ~ age_sp1 + age_sp2 + age_sp3)
+```
+
+By the results of the F-test, we can see that the collective spline terms do contribute significantly to the model. In particular, the spline term for the cutpoint at 4 months suggests linear growth from 0 to 4 months which is followed by a linear growth of a different rate (slope) from 4 to 12 months.
+
+Consider using your models to predict children’s weights. Complete the table below. PLEASE NOTE: AIC also can be calculated by hand using either of the formulas below.
+
+```{r}
+AIC(model4, model5, model6)
+```
+
+PLEASE NOTE: R explicitly count the variance as a parameter when calculating AIC for regression. So the calculations in R will have 3, 14, 6 as the degrees of freedom rather than the 2, 13, 5 shown in the table below. This just means that each AIC value calculated by R will be 2\*1=2 units higher than the values when you calculate by hand according to this table!
+
+One can obtain the log=likelihood using the following command:
+
+```{r}
+logLik(model4); logLik(model5); logLik(model6)
+```
+
++----------------------+---------+------+------------+----------------+---------------------------------------------+
+|                      |         |      |            |                |                                             |
++======================+=========+======+============+================+=============================================+
+| Model (# parameters) | RSS     | MSE  | AIC        | log-likelihood | AIC = -2 (log likelihood) + 2 (#parameters) |
++----------------------+---------+------+------------+----------------+---------------------------------------------+
+| linear (2)           | 1083.21 | 1.21 | 2720.79    | -1358.39       | 2720.78                                     |
++----------------------+---------+------+------------+----------------+---------------------------------------------+
+| monthly means (13)   | 922.61  | 1.04 | 2598.69    | -1286.34       | 2598.68                                     |
++----------------------+---------+------+------------+----------------+---------------------------------------------+
+| linear spine (5)     | 938.26  | 1.05 | 2598.21    | -1293.89       | 2597.78                                     |
++----------------------+---------+------+------------+----------------+---------------------------------------------+
+
+### Conclusion
+
+Based on the results of each of these 3 models, we would conclude that the relationship between weight and age is not strictly linear. Each of the other models (ANOVA and linear spline) have lower AIC values and reduced residual mean squared errors and would be preferred to the linear model.
+
+			
+
+			
+
+		
+
+	
+
+
+
+
+
+
+
+
+
