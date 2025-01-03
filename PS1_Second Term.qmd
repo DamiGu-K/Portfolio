@@ -1,0 +1,156 @@
+---
+title: PS1_Second Term
+format: html
+editor: visual
+toc: true
+toc-depth: 2
+execute:
+ warning: FALSE
+---
+
+# Simple Linear Regression: Interface, Checks on assumptions and ANOVA
+
+# 
+
+## Step A
+
+The objective of this problem is to determine from a sample of the carotid endarterectomy (CE) expenditure data whether the average cost of CE differs among four groups of individuals: younger men, older men, younger women, and older women. Here, “younger”and “older” denote persons less than or equal to age 60 years and above 60 years of age, respectively.
+
+First, create a new variable, agegen, to indicate the four age-gender groups.
+
+```{r}
+library(tidyverse)
+ce621 = read_csv("ce621.csv")
+
+ce621 = ce621 %>% # start with the original data, the create subgrups
+mutate(agegen=case_when(sex=="Male" & age<=60 ~ "m <=60",
+                        sex=="Female" & age<=60 ~ "f <=60",
+                        sex=="Male" & age > 60 ~ "m >60",
+                        sex=="Female" & age > 60 ~ "f >60"))
+```
+
+Inspect the data using side-by-side box plots.
+
+```{r}
+boxplot(totchg ~ agegen, data=ce621, ylab="Total charges in dollars")
+ce621 %>%
+group_by(agegen) %>%
+summarize(obs=n(), mean=mean(totchg), median=median(totchg),
+sd=sd(totchg), min=min(totchg), max=max(totchg))
+```
+
+The medians are relatively similar across all four groups, hovering around 5,000-6,000. The key difference lies in the spread, with m\<=60 group showing the least variability and f\<= 60 group displaying substantially larger spread and more extreme outliers reaching up to 40,000. All groups show positive skew.
+
+Now use the data to perform a linear regression of total charges on the age-gender groups to partition the total variability as displayed in the analysis of variance (ANOVA) table for regression.
+
+```{r}
+model1 = lm(totchg ~ as.factor(agegen), data=ce621)
+anova(model1)
+summary(model1)
+
+
+```
+
+Each of the regression coefficients for each as.factor(agegen) group are the differences in average CE costs between that group and the reference group (females\<= 60 years of age). None of these comparisons are statistically significantly different from 0 (Note: the null hypothesis for (Intercept) is that the mean CE cost for the reference group equals 0). Using the regression analysis, a test of the overall hypothesis of no group difference is provided by the F-statistic = 1.94, df = 3, 196.
+
+The regression coefficients and standard errors are the same for the results of both the lm and glm commands; the results differ in that the lm command uses a t-statistic for calculating the test statistics and 95% confidence intervals whereas the glm command uses the z statistic.
+
+Based on the results from the F test, **we conclude that the population mean costs are not statistically significantly different across the 4 age-gender groups.**
+
+## Step B
+
+::: callout-tip
+Recall that two assumptions of the linear regression are:
+
+• Observations within a group are approximately normally distributed.
+
+• The within-group variance is the same across all groups.
+:::
+
+Let's create residual diagnostic plots for linear regression.
+
+The following three plots are useful:
+
+1.  Histogram of standardized residuals
+2.  Plot of residuals versus covariate
+3.  Plot of residuals versus fitted value
+
+Obtain the residuals from the regression model above. Make a histogram of residuals. Make a boxplot of the residuals by group. Plot the residuals against group.
+
+```{r}
+model1 = lm(totchg ~ as.factor(agegen), data=ce621)
+qplot(x=model1$residuals, geom="histogram", bins=5, xlab="Residual")
+boxplot(model1$residuals ~ ce621$agegen, ylab="Residuals")
+qplot(x=ce621$agegen, y=model1$residuals, xlab="agegen", ylab="Residuals")
+```
+
+Plot the residuals against the predicted values.
+
+```{r}
+qplot(x=jitter(model1$fitted.values), y=model1$residuals, xlab="Fitted values", ylab="Residuals")
+```
+
+It is clear that the residuals are not Gaussian, not even approximately, and do not have equal variances. The latter violation of assumptions will likely make the inferences incorrect. The F- test and t-tests will not have F and t-distributions under the null.
+
+One way to address this problem is by analyzing a transformation of the CE expenditure data, rather than the data on its original scale. This works if you want to ask questions about whether there are differences between groups rather than estimating the size of the differences. To accomplish this, generate a new variable which is the logarithm(log10)of CE expenditures.
+
+```{r}
+ce621 = ce621 %>% mutate(logtotchg=log10(totchg))
+model2 = lm(logtotchg ~ as.factor(agegen), data=ce621)
+qplot(x=model2$residuals, geom="histogram", bins=5, xlab="Residual")
+qplot(x=ce621$agegen, y=model2$residuals, xlab="agegen", ylab="Residuals")
+qplot(x=jitter(model2$fitted.values), y=model2$residuals, xlab="Fitted values", ylab="Residuals")
+```
+
+Even after the log transformation of total CE costs, it appears that there is still unequal variability across groups.
+
+## Step C
+
+Another way to proceed when the focus is the difference in the means themselves, not the means of a transformed value, is to use regression to estimate the means [but to use bootstrapping to get more appropriate standard errors that do not depend on the normal and equal variance assumptions.]{.underline}
+
+```{r}
+library(boot)
+
+# function to obtain regression coefficients
+bs = function(formula, data, indices) {
+d = data[indices,] # allows boot to select sample
+fit = lm(formula, data=d)
+return(coef(fit))
+}
+
+# bootstrapping with 250 replications
+results = boot(data=ce621, statistic=bs, R=250, formula=totchg~agegen)
+
+# view results
+results
+```
+
+## 
+
+Compare the bootstrap standard errors and confidence intervals with the ones from the original regression analysis. [These are more valid when the assumptions are so strongly violated.]{.underline}
+
+```{r}
+# get 95% confidence intervals from the bootstrap
+boot.ci(results, type="norm", index=1) # intercept (f <=60)
+boot.ci(results, type="norm", index=2) # f >60
+boot.ci(results, type="norm", index=3) # m <=60
+boot.ci(results, type="norm", index=4) # m >60
+# get 95% confidence intervals from the regression model
+confint(model1)
+```
+
+However, the bootstrap procedure is **not** forcing the assumption of a common variance across the four
+groups (which is assumed in linear regression using either the regress, or glm commands). The
+resampling procedure of the bootstrap captures the actual variability within each group. In this case, even with the bootstrapped standard errors/confidence intervals, the regression coefficients
+(difference in means compared to the reference group of f \<=60) are not significantly different from zero.
+
+## Conclusion
+
+## 
+				
+
+			
+
+		
+
+	
