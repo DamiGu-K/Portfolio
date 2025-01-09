@@ -1,6 +1,6 @@
 ## Clinical Investigator
 
-## Technical Skills: R, STATA, RedCap, Atlas.ti, EndNote, Excel 
+## Technical Skills: R, STATA, Atlas.ti, EndNote
 
 ## Education
 
